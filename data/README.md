@@ -1,0 +1,1 @@
+The data needed for this website is in the xlsx file "Workout_Routine_Dirty." This file contains the unedited version of the data, including some missing values. The R document gpsdataclean.R contains the code for the intial clean of the data. This removes NAs and formats the data for how it will be used in the website. 
