@@ -1,11 +1,187 @@
 ---
-title: "pm566 final"
+title: "2023 Post-Season Performance Review"
 ---
 
-This is a Quarto website.
+FC566 High-Performance Department
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
+This project reviews the physical metrics from GPS-obtained data along with self-reported wellness data for nine players on the fictitious soccer team FC566. The GPS data includes values for Distance, Acceleration Count, Maximum Acceleration, Deceleration Count, Maximum Deceleration, and Maximum Velocity. The self-reported data includes values for sleep duration, sleep score, sleep quality, stress, soreness, and rate of perceived exertion. The data also includes values for injury and injury type, as well as descriptive data like position and session type. The goal of this project is to assess the physical load during the training week and on game day, as well as recovery through sleep.
 
-```{r}
-1 + 1
+```{r setup, message=FALSE, echo=FALSE, warning=FALSE}
+source("gpsdataclean.R")
+```
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+avg.by.date <- full.perf.data |>
+  group_by(Date, Session_Type) |>
+  summarize(
+    avg.RPE = round(mean(RPE, na.rm = TRUE), digits = 2),
+    avg.Dis = round(mean(Distance, na.rm = TRUE)),
+    avg.AC = round(mean(Acceleration_Count, na.rm = TRUE)),
+    avg.MA = round(mean(Max_Acceleration, na.rm = TRUE), digits = 2),
+    avg.DC = round(mean(Deceleration_Count, na.rm = TRUE)),
+    avg.MD = round(mean(Max_Deceleration, na.rm = TRUE), digits = 2),
+    avg.MS = round(mean(Max_Speed, na.rm = TRUE), digits = 2)
+  )
+
+max.by.date <- full.perf.data |>
+  group_by(Date, Session_Type) |>
+  summarize(
+    Dis = max(Distance, na.rm = TRUE),
+    MS = max(Max_Speed, na.rm = TRUE)
+  )
+```
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+seq_1 <- rep(c("GD-5", "GD-4", "GD-3", "GD-2", "GD-1", "GD"), times = 3)
+seq_2 <- rep(c("GD+1", "GD+2", "GD+3"), times = 1)
+seq_3 <- rep(c("GD-5", "GD-4", "GD-3", "GD-2", "GD-1", "GD"), times = 3)
+seq_4 <- rep(c("GD+1", "GD+2"), times = 1)
+
+combined_sequence <- c(seq_1, seq_2, seq_3, seq_4)
+
+avg.by.date$GD <- combined_sequence
+max.by.date$GD <- combined_sequence
+```
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+avg.buildup <- avg.by.date |>
+  group_by(GD) |>
+  summarize(
+    RPE = round(mean(avg.RPE, na.rm = TRUE), digits = 2),
+    Dis = round(mean(avg.Dis, na.rm = TRUE)),
+    AC = round(mean(avg.AC, na.rm = TRUE)),
+    MA = round(mean(avg.MA, na.rm = TRUE), digits = 2),
+    DC = round(mean(avg.DC, na.rm = TRUE)),
+    MD = round(mean(avg.MD, na.rm = TRUE), digits = 2),
+    MS = round(mean(avg.MS, na.rm = TRUE), digits = 2)
+  )
+
+```
+
+### Overall Load
+
+This plot displays the average distance covered among players for each session. Total distance is often used to help determine the load of a session, with higher distances indicating a harder session. The bars are colored according to the number of days until the next game. If a training session fell immediately after a game, it is identified by the number of days after the game.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+colorcode <- c(
+  "GD-5" = "gold",
+  "GD-4" = "yellow",
+  "GD-3" = "darkgreen",
+  "GD-2" = "green", 
+  "GD-1" = "lightgreen",
+  "GD" = "red",
+  "GD+1" = "lightblue",
+  "GD+2" = "blue",
+  "GD+3" = "darkblue"
+)
+library(plotly)
+pdis <- avg.by.date |>
+  plot_ly(x = ~Date, y = ~avg.Dis,
+          type = 'bar',
+          mode = 'markers',
+          color = ~GD,
+          colors = colorcode,
+          hoverinfo = 'text',
+          text = ~paste(paste(Date, ":", sep = ""),
+                        paste(GD, sep = ""),
+                        paste(avg.Dis, "m", sep = ''),
+                        sep = "<br>")) |>
+  layout(title = "Avgerage Distance Covered",
+         xaxis = list(title = "Date"),
+         yaxis = list(title = "Distance (m)"))
+pdis
+```
+
+```{r plot1, message=FALSE, echo=FALSE, warning=FALSE}
+
+GDavg <- avg.by.date[avg.by.date$GD == "GD",]
+p1 <-  GDavg |>
+  plot_ly(x = ~Date) |>
+  add_trace(x = ~Date, y = ~avg.Dis,
+          type = 'bar',
+          mode = 'markers',
+          name = "Total Distance (m)") |>
+  add_trace(x = ~Date, y = ~avg.MS,
+          type = 'scatter',
+          yaxis = "y2",
+          name = "Max Velocity (mph)") |>
+  layout(title = "Distance Covered and Max Velocity on Game Day",
+         xaxis = list(title = "Game Day"),
+         yaxis = list(title = "Distance Covered (m)"),
+         yaxis2 = list(title = "Max Velocity (kmh)", overlaying = "y", side = "right"))
+
+max.gd <- max.by.date[max.by.date$GD == "GD",]
+p2 <- max.gd |>
+  plot_ly(x = ~Date) |>
+  add_trace(x = ~Date, y = ~Dis,
+          type = 'bar',
+          mode = 'markers',
+          name = "Total Distance (m)") |>
+  add_trace(x = ~Date, y = ~MS,
+          type = 'scatter',
+          yaxis = "y2",
+          name = "Max Velocity (mph)") |>
+  layout(title = "Distance Covered and Max Velocity on Game Day",
+         xaxis = list(title = "Game Day"),
+         yaxis = list(title = "Distance Covered (m)"),
+         yaxis2 = list(title = "Max Velocity (kmh)", overlaying = "y", side = "right"))
+```
+
+### Game Day Load
+
+These plots display the average and maximum distances covered among the players during each game. It is important to understand both the average and max output on a game day, as that is what players need to be exposed to during training, so they are equipped to handle these loads. The plots also include the average and maximum velocity hit during each game. This, coupled with distance, can help identify the demands of each game. If distance is lower, but max velocity is higher, players may have covered distances at higher thresholds therefore increasing the overall load. If players cover high distances, but reach lower max velocities, this can result in a lesser overall load.
+
+::: panel-tabset
+#### Average
+
+```{r p1, message=FALSE, echo=FALSE, warning=FALSE}
+p1
+```
+
+#### Max
+
+```{r p2, message=FALSE, echo=FALSE, warning=FALSE}
+p2
+```
+:::
+
+### Positional Load
+
+This plot breaks down the distances covered during games by position. Each position has unique demands, so it is expected that their boxplots will look different. The spread of the boxplots can also indicate how different players fulfill the demands of their position, or how the demands of their position may have changed between games. Some positions are required to run more than others, and the flow of the game may change how much running is done.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+positional <- full.perf.data[full.perf.data$Session_Type == "Game",]
+positional |>
+  plot_ly(x = ~Position, y = ~Distance, 
+        type = 'box',
+        color = ~Position) |>
+  layout(title = "Distance Covered in Games: By Position",
+         xaxis = list(title = "Position"),
+         yaxis = list(title = "Distance Covered (m)"))
+```
+
+### Wellness Review
+
+Here is a heatmap, indicating the sleep score for each player by date. Sleep is essential to recovering from the physical load soccer puts on the body. It is imperative that athletes are getting enough quality sleep. A higher score, on a scale of 0-100, indicates better sleep. Conversely, lower scores indicate poor sleep quality.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+library(tidyr)
+sleep.mat <- full.perf.data |>
+  select(Date, Name, Sleep_Score)
+
+sleep.mat2 <- as.data.frame(pivot_wider(sleep.mat,
+                                        names_from = Name,
+                                        values_from = Sleep_Score))
+rownames(sleep.mat2) <- sleep.mat2$Date
+sleep.mat2$Date <- NULL
+
+data <- as.matrix(sleep.mat2)
+sleep <- plot_ly(x = colnames(data), y = rownames(data),
+        z = ~data,
+        type = 'heatmap',
+        showscale = T) |>
+  layout(title = "Player Sleep Score by Day",
+         xaxis = list(title = "Player Name"),
+         yaxis = list(title = "Date"))
+sleep
 ```

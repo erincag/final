@@ -1,0 +1,226 @@
+---
+title: "PM566 Final Project"
+format: html
+embed-resources: true
+---
+
+# 2023 Post-Season Performance Review - Full Report
+
+### Physical and Wellness Metrics - FC566
+
+## Introduction
+
+Player tracking is an ever-increasing practice in professional sports and is even trickling down to college and youth sports. Collecting GPS, accelerometer, HR, and self-reported wellness data can provide a means for coaches to adjust their training plans in an effort to minimize injuries and optimize athletic performance. These data can be utilized to answer questions regarding player readiness, training effort or load, potential cause/risk for injury, effectiveness of training, and more. Data from games can also be used to determine the desired load during training leading up to the game. It is best practice for the total training load throughout a week to be greater than the maximum potential load experienced during a game. A common practice is prescribing 180-200% of the game load, spread across training sessions throughout the week.
+
+Understanding each metric is important to the proper prescription of training throughout the week. All physical metrics are obtained through GPS tracking devices. Distance is the total distance covered during an activity, acceleration is a bout of movement above the 3.5 m/s/s acceleration threshold, deceleration is a bout of movement below the -3.5 m/s/s acceleration threshold, and max velocity is the highest speed (kmh) achieved within an activity.
+
+The goal of this data exploration is to identify any relationship between the team average of physical performance metrics during practice based on the number of days until the next game (this is going to be referred to as "training day" throughout this report.) I will also look at relationships between game data, position, and max velocity. Finally, I will assess player recovery by looking at the sleep patterns over time.
+
+## Methods
+
+This data set was provided as a free resource for Sports Scientists to get exposure to working with these types of data without having to be working with a team, or without having to use potentially sensitive data from the team they are working with. This is training, wellness, and injury data for 10 hypothetical soccer players created by Micheal Hegedusich. These players now play on the fictitious team, Football Club 566!
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+library(dplyr)
+player.data <- readxl::read_excel("Workout_Routine_Dirty.xlsx")
+
+#str(player.data)
+
+summary <- summary(player.data)
+# knitr::kable(summary, caption = "Summary Of Player Data")
+```
+
+There are seven cases in which performance data was recorded, while wellness and RPE was left blank by the athlete resulting in an NA. For RPE, I will use the mean of the RPE on the date of the missing value, as this will be the most accurate for the training session. However, for other wellness data, I will use the mean for each player to best fill in the missing data. Finally, I am going to remove all goalkeeper data, as this position has very different demands of a field player and will interfere with the interpretation of our data.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+player.mean <- player.data |>
+  group_by(Name) |>
+  summarize(
+    avg.duration = round(mean(Sleep_Duration, na.rm = TRUE)),
+    avg.score = round(mean(Sleep_Score, na.rm = TRUE)),
+    avg.quality = round(mean(Sleep_Quality, na.rm = TRUE), digits = 2),
+    avg.soreness = round(mean(Soreness, na.rm = TRUE), digits = 2),
+    avg.stress = round(mean(Stress, na.rm = TRUE), digits = 2)
+  )
+
+training.avg <- player.data |>
+  group_by(Date) |>
+  summarize(
+    avg.RPE = round(mean(RPE, na.rm = TRUE), digits = 2)
+  )
+
+new <- player.data |>
+  left_join(player.mean, by = "Name") |>
+  mutate(
+    Sleep_Duration = ifelse(is.na(Sleep_Duration), avg.duration, Sleep_Duration),
+    Sleep_Score = ifelse(is.na(Sleep_Score), avg.score, Sleep_Score),
+    Sleep_Quality = ifelse(is.na(Sleep_Quality), avg.quality, Sleep_Quality),
+    Soreness = ifelse(is.na(Soreness), avg.soreness, Soreness),
+    Stress = ifelse(is.na(Stress), avg.stress, Stress)
+  )
+
+cleaned <- new |>
+  left_join(training.avg, by = "Date") |>
+  mutate(
+    RPE = ifelse(is.na(RPE), avg.RPE, RPE)
+  )
+
+full.perf.data <- cleaned[cleaned$Position != "Goalkeeper",1:18]
+full.perf.data$Date = as.Date(full.perf.data$Date, format = "%m/%d/%y")
+```
+
+For my first question, I want to explore the relationship between the training day (number of days before/after a game) and the physical output metrics.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+library(ggplot2)
+library(tidytext)
+
+# Initial plot to try and identify any potential patterns in the data
+plot(x = full.perf.data$Date, y = full.perf.data$Distance, xlab = "Date",ylab = "Distance" )
+# Identify the number of days included in this data set
+days <- unique(full.perf.data$Date)
+# Identify the number of games included in this data set
+game.days <- unique(full.perf.data[full.perf.data$Session_Type == "Game", "Date"])
+```
+
+When plotting all points for distance, there does not seem to be a lot of meaningful information to gather. However, there are a few things to point out. Most of the data falls between 5000 and 8000, with 6 sets of "outliers" with values in the 10000s. Based, on my topic knowledge, these are most likely the distance measures from the games included in this data set. Within the data set, there a 41 unique dates, each representing either a practice or a game. Of those, 6 unique dates are game days, which aligns with my assumption based on the distance plot.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+#summarize the data to obtain means for each date. in team settings, the mean is typically used to identify trend across the team due to the inherit varaiblility between players on any given day
+avg.by.date <- full.perf.data |>
+  group_by(Date, Session_Type) |>
+  summarize(
+    avg.RPE = round(mean(RPE, na.rm = TRUE), digits = 2),
+    avg.Dis = round(mean(Distance, na.rm = TRUE)),
+    avg.AC = round(mean(Acceleration_Count, na.rm = TRUE)),
+    avg.MA = round(mean(Max_Acceleration, na.rm = TRUE), digits = 2),
+    avg.DC = round(mean(Deceleration_Count, na.rm = TRUE)),
+    avg.MD = round(mean(Max_Deceleration, na.rm = TRUE), digits = 2),
+    avg.MS = round(mean(Max_Speed, na.rm = TRUE), digits = 2)
+  )
+
+max.by.date <- full.perf.data |>
+  group_by(Date, Session_Type) |>
+  summarize(
+    Dis = max(Distance, na.rm = TRUE),
+    MS = max(Max_Speed, na.rm = TRUE)
+  )
+```
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+seq_1 <- rep(c("GD-5", "GD-4", "GD-3", "GD-2", "GD-1", "GD"), times = 3)
+seq_2 <- rep(c("GD+1", "GD+2", "GD+3"), times = 1)
+seq_3 <- rep(c("GD-5", "GD-4", "GD-3", "GD-2", "GD-1", "GD"), times = 3)
+seq_4 <- rep(c("GD+1", "GD+2"), times = 1)
+
+combined_sequence <- c(seq_1, seq_2, seq_3, seq_4)
+
+avg.by.date$GD <- combined_sequence
+max.by.date$GD <- combined_sequence
+```
+
+To help establish a better understanding of the load, I am going to take the average across players for each date. This will allow me to look deeper into trends that may exist based on the training day. I am also going to take the maximum values of each metric for every game, which will be used in further analysis.
+
+## Preliminary Results
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+meandis <- avg.by.date |>
+  ggplot() +
+  geom_col(mapping = aes(x = Date, y = avg.Dis, color = GD, fill = GD)) +
+  labs(x = "GD", y = "Distance (m)")
+meandis
+```
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+meanvelo <- avg.by.date |>
+  ggplot() +
+  geom_col(mapping = aes(x = Date, y = avg.MS, color = GD, fill = GD)) +
+  labs(x = "GD", y = "Max Velocity (kmh)")
+meanvelo
+```
+
+After looking at the mean values for distance covered and max velocity, it is clear there was no real pattern across the training days. For distance, the averages remain fairly constant until GD, when they peak. It is expected that the values for distance are significantly greater during games than in training, so that appears normal. However, in an ideal training structure, there would be a clear delineation between the training days. Distances should look similar to a bell-shaped curve, starting the week with lower distances to ensure proper recovery from the game, peaking midweek when players are fresh and still have time to recover before the game, and taper off before that game to ensure players are not too fatigued. With speed, you want players to hit their peak within 1 to 2 days of a game. This ensures they are sharp, and prepared to hit extreme speeds if needed in a game situation. With this team, players occasionally peak on the GD-1 or GD-2, but it is not consistent throughout each week.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+GD.table <- avg.by.date |>
+  group_by(GD) |>
+  summarize(
+    RPE = round(mean(avg.RPE), digits = 2),
+    Distance = round(mean(avg.Dis)),
+    Accelerations = round(mean(avg.AC)),
+    Decelerations = round(mean(avg.DC)),
+    Max.Speed = round(mean(avg.MS), digits = 2)
+  ) |>
+  arrange(desc(GD))
+
+knitr::kable(GD.table, caption = "5 Day Build Breakdown")
+```
+
+This table provides a breakdown of the average output for each metric on any given training day or a game. Looking at this table, you can see values for RPE are almost always around 5. This level of consistency may suggest there is not enough variation in the difficulty of training throughout the week, an assumption that is supported by the lack of variation in distance values as well. Another key observation is that the acceleration and deceleration values on any given day are fairly close to each other. The similarity between the two is important for preventing injuries, as an imbalance between the number of accelerations and decelerations performed within a session can indicate some level of neuromuscular fatigue and increased injury risk. Finally, when looking at the distance values for the week, this team completes almost 300% of what they may do in a game throughout the course of the week. It is possible this players are being overexposed and may be at greater risk for overuse injuries.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+library(cowplot)
+GDavg <- avg.by.date[avg.by.date$GD == "GD",]
+meangd <- GDavg |>
+  ggplot(mapping = aes(x = Date)) +
+  geom_col(mapping = aes(y = avg.Dis)) +
+  labs(x = "Game Date", y = "Average Distance (m)")
+
+meanms <- GDavg |>
+  ggplot(mapping = aes(x = Date)) +
+  geom_point(mapping = aes(y = avg.MS)) +
+  labs(x = "Game Date", y = "Max Velocity (kmh)")
+
+ avg <- plot_grid(meangd, meanms, labels = c("D", "V"), label_size = 9)
+ title <- ggdraw() + draw_label("Game Day Average: Distance (m) and Max Velocity (kmh)")
+ plot_grid(title, avg, ncol = 1, rel_heights=c(0.1, 1))
+```
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+GDmax <- max.by.date[max.by.date$GD == "GD",]
+maxgd <- GDmax |>
+  ggplot(mapping = aes(x = Date)) +
+  geom_col(mapping = aes(y = Dis)) +
+  labs(x = "Game Date", y = "Max Distance (m)")
+
+maxms <- GDmax |>
+  ggplot(mapping = aes(x = Date)) +
+  geom_point(mapping = aes(y = MS)) +
+  labs(x = "Game Date", y = "Max Velocity (kmh)")
+
+ max <- plot_grid(maxgd, maxms, labels = c("D", "V"), label_size = 9)
+ titlem <- ggdraw() + draw_label("Game Day Maximum: Distance (m) and Max Velocity (kmh)")
+ plot_grid(titlem, max, ncol = 1, rel_heights=c(0.1, 1))
+```
+
+In addition to distance, another metric to help indicate load and demands of a game is max velocity. Because there does not appear to be a clear pattern between max velo and distance in these charts, it is possible the demands for each game were different. For example, the second game has a high distance and a low max velocity. This could the team was in control of the game: covering large distances in slow, methodical patterns. The first game has a low distance and a high max velocity. In this case, players may have done more standing before having to make rapid movements to defend or attack the goal.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+position <- full.perf.data[full.perf.data$Session_Type == "Game",]
+positional <- position |>
+  ggplot() +
+  geom_boxplot(mapping = aes(x = Position, y = Distance, fill = Position)) +
+  labs(title = "Game Day: Distance by Position", x = "Position", y = "Distance")
+positional
+```
+
+During a game, the demands for each position are unique, as is displayed in this boxplot. Generally, the right wing appears to cover the most distance. A winger plays of the edge of the field and has to constantly make runs to create chances for crosses and shots. Therefore, it make sense that they would cover the most distance. The left wing does have values that appear similar to those of the right wing, but it has a much larger range. This may indicate, the left wing does not get as much of the play as the right wing and doesn't always have to make as many runs. The center forward seems to generally cover the least distance, which is logical as they often stays towards the top of the field as a target and don't help as much on defense.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+sleep <- full.perf.data |>
+  ggplot() +
+  geom_point(mapping = aes(x = Name, y = Date, color = Sleep_Score)) +
+  scale_color_gradient(low = "blue", high = "yellow") +
+  labs(title = "Player Sleep Score by Date", x = "Player Name", y = "Date")
+sleep
+```
+
+Sleep is a good indicator of recovery, and is key to being at peak performance. Here we can see the players' sleep scores, with higher being better sleep. There are a few players that may need to focus on creating better sleep habits to improve overall health and performance. Players like Bill, Caden, and Micah have more purple and blue dots than yellow and seem to have lower scores more often than others. This was during November and December, so it is possible the holidays may have played a role in the poor sleep, but they should still look for places within their routines to create an environment for improved sleep.
+
+## Conclusion
+
+After reviewing the data from part of this season, my main conclusion is there is much room for improvement. When looking at the build-up to a game, there is no distinction between days. To optimize preparation, recovery, and performance there should be a gradual introduction to load at the start of the weak, the maximum load at the middle of the weak, and a taper off of load right before the game. This will ensure players are adequately prepared, but not overexposed. The change in difficulty can be complemented by focusing on position-specific loads throughout the training week. These data clearly indicate that each position has its own demands that should be introduced within the controlled training environment. Along with the physical aspects, sleep should also be improved apond. While the data shows there are many times the athletes are getting quality sleep, the goal should always be to eliminate as many nights of poor sleep as possible.
+
+One positive shown by the data is the similarity between acceleration and deceleration counts across the week. Soccer is a sport that requires at lot of speeding up and slowing down rapidly. If your body stops doing one of these, there would be some negative consequences. An imbalance could indicate the start of an injury or increasing fatigue, two things that you want to avoid. Therefore, the athletes should continue being exposed to both accel and decel in similar number.
+
+Overall, the data displayed no pattern between training day and physical metrics. Position appears to be a strong determinant of distance covered in games. Finally, while not entirely concerning, there are some low sleep scores that could be improved to aid in better recovery.

@@ -1,13 +1,15 @@
 project:
   type: website
+  output-dir: docs
 
 website:
-  title: "pm566 final"
+  title: "Football Club 566"
   navbar:
     left:
       - href: index.qmd
         text: Home
-      - about.qmd
+      - href: download.qmd  
+      
 
 format:
   html:
