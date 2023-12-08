@@ -1,0 +1,10 @@
+---
+title: "Download Full Report"
+---
+
+[Download PDF](Football Club 566 - PM566 Final Project.pdf)
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+ pdf_url <- "Football Club 566 - PM566 Final Project.pdf"
+
+```
