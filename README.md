@@ -8,4 +8,4 @@ This project utilizes a publicly available data set provided by Micheal Hegedusi
 
 The website for this project includes 5 interactive graphs and a brief description in addition to a downloadable PDF of the full report.
 
-A link to the website can be found here:
+A link to the website can be found here: https://erincag.github.io/final/
